@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.23107.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SqlSnap.Core", "SqlSnap.Core\SqlSnap.Core.csproj", "{B1306790-E791-4813-A5F1-ED0018602D99}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SqlSnap.Cli", "SqlSnap.Cli\SqlSnap.Cli.csproj", "{1F5FF36D-F11E-49B2-A490-B50867E8F38E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B1306790-E791-4813-A5F1-ED0018602D99}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B1306790-E791-4813-A5F1-ED0018602D99}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B1306790-E791-4813-A5F1-ED0018602D99}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B1306790-E791-4813-A5F1-ED0018602D99}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1F5FF36D-F11E-49B2-A490-B50867E8F38E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1F5FF36D-F11E-49B2-A490-B50867E8F38E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1F5FF36D-F11E-49B2-A490-B50867E8F38E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1F5FF36D-F11E-49B2-A490-B50867E8F38E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
