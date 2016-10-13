@@ -5,19 +5,19 @@ namespace SqlSnap.Cli
     [Verb("backup", HelpText = "Execute a SQL Server snapshot backup")]
     public class BackupOptions
     {
-        [Option("instanceName", HelpText = "Name of SQL Server instance for which to connect")]
+        [Option('i', "instanceName", HelpText = "Name of SQL Server instance for which to connect (optional)")]
         public string InstanceName { get; set; }
 
-        [Option("metadata", HelpText = "Path to file to store backup metadata")]
+        [Option('m', "metadata", Required = true, HelpText = "Path to file to store backup metadata")]
         public string MetadataPath { get; set; }
 
-        [Option("database", HelpText = "Database to backup")]
+        [Option('d', "database", Required = true, HelpText = "Database to backup")]
         public string Database { get; set; }
 
-        [Option("command", HelpText = "Command to execute that performs the snapshot")]
+        [Option('c', "command", Required = true, HelpText = "Command to execute that performs the snapshot")]
         public string SnapshotCommand { get; set; }
 
-        [Option("verbose", HelpText = "Include verbose logging information")]
+        [Option('v', "verbose", HelpText = "Include verbose logging information")]
         public bool Verbose { get; set; }
     }
 }

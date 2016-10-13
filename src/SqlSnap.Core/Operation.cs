@@ -20,7 +20,7 @@ namespace SqlSnap.Core
 
         private readonly Dictionary<VDCommandCode, Func<VDC_Command, int>> _commandHandlers;
 
-        public Operation(string instanceName, string databaseName, OperationMode mode, Stream metadataStream, bool noRecovery, Action snapshotAction)
+        public Operation(string instanceName, string databaseName, OperationMode mode, Stream metadataStream, Action snapshotAction, bool noRecovery)
         {
             _instanceName = instanceName;
             _mode = mode;
@@ -116,7 +116,7 @@ namespace SqlSnap.Core
         private int HandleSnapshot(VDC_Command command)
         {
             Log.Information("Beginning snapshot");
-            _snapshotAction();
+            _snapshotAction?.Invoke();
             Log.Information("Snapshot completed successfully");
             return 0;
         }
@@ -164,9 +164,10 @@ namespace SqlSnap.Core
             using (var connection = GetConnection())
             using (var command = connection.CreateCommand())
             {
-                var virtualDeviceName = $"sqlsnap\\{Guid.NewGuid()}";
+                var virtualDeviceName = $"sqlsnap-{Guid.NewGuid()}";
 
                 command.CommandText = GetSqlCommand(virtualDeviceName);
+                command.CommandTimeout = 600;
 
                 var config = new VDConfig
                 {
@@ -195,7 +196,14 @@ namespace SqlSnap.Core
                 }
                 finally
                 {
-                    virtualDeviceSet.Close();
+                    try
+                    {
+                        virtualDeviceSet.Close();
+                    }
+                    catch
+                    {
+                        // ignore errors when closing
+                    }
                 }
             }
         }
