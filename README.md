@@ -33,6 +33,7 @@ usage: `sqlsnap backup [options]`
 -d, --database        Required. Database to backup
 -c, --command         Required. Command to execute that performs the snapshot
 -v, --verbose         Include verbose logging information
+-t, --timeout         Timeout for backup operation (in seconds, default 600)
 ```
 
 #### Restore
@@ -48,6 +49,7 @@ usage `sqlsnap restore [options]`
                       already mounted the snapshot)                  
 --noRecovery          Restore the database with the NORECOVERY option
 -v, --verbose         Include verbose logging information
+-t, --timeout         Timeout for backup operation (in seconds, default 600)
 ```
 
 ## How it works
