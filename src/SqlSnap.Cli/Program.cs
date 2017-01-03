@@ -55,7 +55,8 @@ namespace SqlSnap.Cli
                 using (var stream = File.Open(options.MetadataPath, FileMode.Create, FileAccess.Write, FileShare.None))
                 {
                     var server = new Server(options.InstanceName);
-                    server.BackupAsync(options.Database, stream, () => RunSnapshotCommand(options.SnapshotCommand))
+                    server.BackupAsync(options.Database, stream, () => RunSnapshotCommand(options.SnapshotCommand),
+                        options.Timeout)
                         .Wait();
                 }
             }
@@ -81,7 +82,7 @@ namespace SqlSnap.Cli
                         : () => RunSnapshotCommand(options.SnapshotCommand);
 
                     var server = new Server(options.InstanceName);
-                    server.RestoreAsync(options.Database, stream, snapshotCommand, options.NoRecovery)
+                    server.RestoreAsync(options.Database, stream, snapshotCommand, options.NoRecovery, options.Timeout)
                         .Wait();
                 }
             }

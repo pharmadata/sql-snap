@@ -11,21 +11,23 @@ namespace SqlSnap.Core
 {
     internal class Operation
     {
-        private readonly string _instanceName;
+        private readonly Dictionary<VDCommandCode, Func<VDC_Command, int>> _commandHandlers;
         private readonly string _databaseName;
+        private readonly string _instanceName;
         private readonly Stream _metadataStream;
         private readonly OperationMode _mode;
         private readonly bool _noRecovery;
         private readonly Action _snapshotAction;
+        private readonly int _timeout;
 
-        private readonly Dictionary<VDCommandCode, Func<VDC_Command, int>> _commandHandlers;
-
-        public Operation(string instanceName, string databaseName, OperationMode mode, Stream metadataStream, Action snapshotAction, bool noRecovery)
+        public Operation(string instanceName, string databaseName, OperationMode mode, Stream metadataStream,
+            Action snapshotAction, bool noRecovery, int timeout)
         {
             _instanceName = instanceName;
             _mode = mode;
             _metadataStream = metadataStream;
             _noRecovery = noRecovery;
+            _timeout = timeout;
             _snapshotAction = snapshotAction;
             _databaseName = databaseName;
 
@@ -43,7 +45,7 @@ namespace SqlSnap.Core
 
         private SqlConnection GetConnection()
         {
-            var builder = new SqlConnectionStringBuilder()
+            var builder = new SqlConnectionStringBuilder
             {
                 DataSource = string.IsNullOrEmpty(_instanceName) ? "." : $".\\{_instanceName}",
                 IntegratedSecurity = true
@@ -78,7 +80,7 @@ namespace SqlSnap.Core
                 }
                 catch (COMException ex)
                 {
-                    if ((uint)ex.ErrorCode == 0x80770003) // timeout
+                    if ((uint) ex.ErrorCode == 0x80770003) // timeout
                         continue;
                     throw;
                 }
@@ -146,7 +148,7 @@ namespace SqlSnap.Core
                     break;
                 }
 
-                var command = (VDC_Command)Marshal.PtrToStructure(commandPointer, typeof(VDC_Command));
+                var command = (VDC_Command) Marshal.PtrToStructure(commandPointer, typeof (VDC_Command));
                 Func<VDC_Command, int> handler;
                 if (!_commandHandlers.TryGetValue(command.CommandCode, out handler))
                 {
@@ -167,7 +169,7 @@ namespace SqlSnap.Core
                 var virtualDeviceName = $"sqlsnap-{Guid.NewGuid()}";
 
                 command.CommandText = GetSqlCommand(virtualDeviceName);
-                command.CommandTimeout = 600;
+                command.CommandTimeout = _timeout;
 
                 var config = new VDConfig
                 {
@@ -177,7 +179,7 @@ namespace SqlSnap.Core
 
                 Log.Debug("Creating virtual device {virtualDeviceName}", virtualDeviceName);
 
-                var virtualDeviceSet = (IClientVirtualDeviceSet2)new ClientVirtualDeviceSet2();
+                var virtualDeviceSet = (IClientVirtualDeviceSet2) new ClientVirtualDeviceSet2();
                 virtualDeviceSet.CreateEx(_instanceName, virtualDeviceName, ref config);
 
                 try

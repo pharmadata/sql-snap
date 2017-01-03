@@ -18,24 +18,26 @@ namespace SqlSnap.Core
         {
         }
 
-        public async Task BackupAsync(string databaseName, Stream metadataStream, Action snapshotAction)
+        public async Task BackupAsync(string databaseName, Stream metadataStream, Action snapshotAction, int timeout)
         {
             Log.Information("Preparing to backup {databaseName}", databaseName);
 
             await
-                new Operation(_instanceName, databaseName, OperationMode.Backup, metadataStream, snapshotAction, false)
+                new Operation(_instanceName, databaseName, OperationMode.Backup, metadataStream, snapshotAction, false,
+                    timeout)
                     .ExecuteAsync();
 
             Log.Information("Backed up {databaseName} successfully", databaseName);
         }
 
         public async Task RestoreAsync(string databaseName, Stream metadataStream, Action snapshotMountAction,
-            bool noRecovery)
+            bool noRecovery, int timeout)
         {
             Log.Information("Preparing to restore {databaseName}", databaseName);
 
             await
-                new Operation(_instanceName, databaseName, OperationMode.Restore, metadataStream, snapshotMountAction, noRecovery)
+                new Operation(_instanceName, databaseName, OperationMode.Restore, metadataStream, snapshotMountAction,
+                    noRecovery, timeout)
                     .ExecuteAsync();
 
             Log.Information("Restored {databaseName} successfully", databaseName);

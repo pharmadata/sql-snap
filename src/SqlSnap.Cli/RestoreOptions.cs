@@ -22,5 +22,8 @@ namespace SqlSnap.Cli
 
         [Option('v', "verbose", HelpText = "Include verbose logging information")]
         public bool Verbose { get; set; }
+
+        [Option('t', "timeout", HelpText = "Timeout for backup operation (in seconds)", Default = 600)]
+        public int Timeout { get; set; }
     }
 }
