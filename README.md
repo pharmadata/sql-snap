@@ -29,12 +29,14 @@ usage: `sqlsnap backup [options]`
 
 ```
 -i, --instanceName    Name of SQL Server instance for which to connect (optional)
--m, --metadata        Required. Path to file to store backup metadata
--d, --database        Required. Database to backup
+-m, --metadata        Required. Path to directory to store backup metadata
+-d, --database        Required. Database(s) to backup
 -c, --command         Required. Command to execute that performs the snapshot
 -v, --verbose         Include verbose logging information
 -t, --timeout         Timeout for backup operation (in seconds, default 600)
 ```
+
+SQL Snap will write metadata for each database to DatabaseName.metadata in the direcrory specified.
 
 #### Restore
 
@@ -42,8 +44,8 @@ usage `sqlsnap restore [options]`
 
 ```
 -i, --instanceName    Name of SQL Server instance for which to connect (optional)
--m, --metadata        Required. Path to file to containing the backup metadata
--d, --database        Required. Database to restore
+-m, --metadata        Required. Path to directory to containing the backup metadata
+-d, --database        Required. Database(s) to restore
 -c, --command         Command to execute that mounts the snapshot (optional -
                       not required if the database is detached and you've
                       already mounted the snapshot)                  
@@ -51,6 +53,8 @@ usage `sqlsnap restore [options]`
 -v, --verbose         Include verbose logging information
 -t, --timeout         Timeout for backup operation (in seconds, default 600)
 ```
+
+SQL Snap will read metadata for each database from DatabaseName.metadata in the direcrory specified.
 
 ## How it works
 
@@ -77,6 +81,14 @@ The restore flow is similar:
 * Freeze the database (if attached)
 * Mount the snapshot
 * Database restored
+
+## Backing up/restoring multiple databases at once
+
+Often you will store more than one database on a logical disk, so it makes sense to backup/restore all
+databases on the specified disk when taking a snapshot of the disk.
+
+SQL Snap lets you do this by specfying a comma-separated list of databases.  The backup/restore operation
+is consequently threaded and waits until all databases have been frozen before executing the snapshot/mount.
 
 ## Snapshot metadata
 

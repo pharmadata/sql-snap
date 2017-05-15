@@ -1,4 +1,5 @@
-﻿using CommandLine;
+﻿using System.Collections.Generic;
+using CommandLine;
 
 namespace SqlSnap.Cli
 {
@@ -8,11 +9,11 @@ namespace SqlSnap.Cli
         [Option('i', "instanceName", HelpText = "Name of SQL Server instance for which to connect (optional)")]
         public string InstanceName { get; set; }
 
-        [Option('m', "metadata", Required = true, HelpText = "Path to file to store backup metadata")]
+        [Option('m', "metadata", Required = true, HelpText = "Path to directory to store backup metadata")]
         public string MetadataPath { get; set; }
 
-        [Option('d', "database", Required = true, HelpText = "Database to backup")]
-        public string Database { get; set; }
+        [Option('d', "database", Required = true, HelpText = "Database(s) to backup (comma separated)", Separator = ',')]
+        public IList<string> Database { get; set; }
 
         [Option('c', "command", Required = true, HelpText = "Command to execute that performs the snapshot")]
         public string SnapshotCommand { get; set; }
