@@ -2,8 +2,11 @@
 using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
+using Nito.AsyncEx;
 using Serilog;
 using SqlSnap.Core.Vdi;
 
@@ -11,27 +14,28 @@ namespace SqlSnap.Core
 {
     internal class Operation
     {
-        private readonly Dictionary<VDCommandCode, Func<VDC_Command, int>> _commandHandlers;
-        private readonly string _databaseName;
+        private readonly Dictionary<VDCommandCode, Func<Database, VDC_Command, int>> _commandHandlers;
+        private readonly Database[] _databases;
         private readonly string _instanceName;
-        private readonly Stream _metadataStream;
         private readonly OperationMode _mode;
         private readonly bool _noRecovery;
         private readonly Action _snapshotAction;
         private readonly int _timeout;
 
-        public Operation(string instanceName, string databaseName, OperationMode mode, Stream metadataStream,
+        private ManualResetEvent _snapshotResetEvent;
+        private AsyncCountdownEvent _snapshotCountdown;
+
+        public Operation(string instanceName, Database[] databases, OperationMode mode,
             Action snapshotAction, bool noRecovery, int timeout)
         {
             _instanceName = instanceName;
             _mode = mode;
-            _metadataStream = metadataStream;
+            _databases = databases;
             _noRecovery = noRecovery;
             _timeout = timeout;
             _snapshotAction = snapshotAction;
-            _databaseName = databaseName;
 
-            _commandHandlers = new Dictionary<VDCommandCode, Func<VDC_Command, int>>
+            _commandHandlers = new Dictionary<VDCommandCode, Func<Database, VDC_Command, int>>
             {
                 {VDCommandCode.Read, HandleRead},
                 {VDCommandCode.Write, HandleWrite},
@@ -55,7 +59,7 @@ namespace SqlSnap.Core
             return connection;
         }
 
-        private string GetSqlCommand(string virtualDeviceName)
+        private string GetSqlCommand(string virtualDeviceName, string databaseName)
         {
             var sqlOperation = _mode == OperationMode.Backup ? "BACKUP" : "RESTORE";
             var direction = _mode == OperationMode.Backup ? "TO" : "FROM";
@@ -65,7 +69,7 @@ namespace SqlSnap.Core
                 : ", NORECOVERY";
 
             return
-                $"{sqlOperation} DATABASE [{_databaseName}] {direction} VIRTUAL_DEVICE='{virtualDeviceName}' WITH SNAPSHOT{options}";
+                $"{sqlOperation} DATABASE [{databaseName}] {direction} VIRTUAL_DEVICE='{virtualDeviceName}' WITH SNAPSHOT{options}";
         }
 
         private IClientVirtualDevice WaitForDevice(IClientVirtualDeviceSet2 virtualDeviceSet, string virtualDeviceName)
@@ -88,48 +92,47 @@ namespace SqlSnap.Core
             return virtualDeviceSet.OpenDevice(virtualDeviceName);
         }
 
-        private int HandleRead(VDC_Command command)
+        private int HandleRead(Database database, VDC_Command command)
         {
             var buffer = new byte[command.Size];
-            _metadataStream.Read(buffer, 0, command.Size);
+            database.MetadataStream.Read(buffer, 0, command.Size);
             Marshal.Copy(buffer, 0, command.Buffer, command.Size);
             return 0;
         }
 
-        private int HandleWrite(VDC_Command command)
+        private int HandleWrite(Database database, VDC_Command command)
         {
             var buffer = new byte[command.Size];
             Marshal.Copy(command.Buffer, buffer, 0, command.Size);
-            _metadataStream.Write(buffer, 0, command.Size);
+            database.MetadataStream.Write(buffer, 0, command.Size);
             return 0;
         }
 
-        private int HandlePrepareToFreeze(VDC_Command command)
+        private int HandlePrepareToFreeze(Database database, VDC_Command command)
         {
             Log.Debug("Database is freezing in preparation for snapshot");
             return 0;
         }
 
-        private int HandleClearError(VDC_Command command)
+        private int HandleClearError(Database database, VDC_Command command)
         {
             return 0;
         }
 
-        private int HandleSnapshot(VDC_Command command)
+        private int HandleSnapshot(Database database, VDC_Command command)
         {
-            Log.Information("Beginning snapshot");
-            _snapshotAction?.Invoke();
-            Log.Information("Snapshot completed successfully");
+            _snapshotCountdown.Signal();
+            _snapshotResetEvent.WaitOne();
             return 0;
         }
 
-        private int HandleFlush(VDC_Command command)
+        private int HandleFlush(Database database, VDC_Command command)
         {
-            _metadataStream.Flush();
+            database.MetadataStream.Flush();
             return 0;
         }
 
-        private void HandleCommands(IClientVirtualDevice virtualDevice)
+        private void HandleCommands(Database database, IClientVirtualDevice virtualDevice)
         {
             while (true)
             {
@@ -144,31 +147,49 @@ namespace SqlSnap.Core
                     if ((uint) ex.ErrorCode != 0x8077000E) throw;
 
                     Log.Information("Metadata has been written successfully");
-                    _metadataStream.Close();
+                    database.MetadataStream.Close();
                     break;
                 }
 
                 var command = (VDC_Command) Marshal.PtrToStructure(commandPointer, typeof (VDC_Command));
-                Func<VDC_Command, int> handler;
+                Log.Debug("Received command {command} for database {database}", command.CommandCode, database.Name);
+                Func<Database, VDC_Command, int> handler;
                 if (!_commandHandlers.TryGetValue(command.CommandCode, out handler))
                 {
                     virtualDevice.CompleteCommand(commandPointer, 50, command.Size, 0); // 50 = unsupported
                     continue;
                 }
 
-                var completionCode = handler(command);
+                var completionCode = handler(database, command);
                 virtualDevice.CompleteCommand(commandPointer, completionCode, command.Size, 0);
             }
         }
 
         public async Task ExecuteAsync()
         {
+            _snapshotResetEvent = new ManualResetEvent(false);
+            _snapshotCountdown = new AsyncCountdownEvent(_databases.Length);
+            var tasks = _databases.Select(ExecuteAsync).ToArray();
+
+            await _snapshotCountdown.WaitAsync();
+
+            Log.Information("Beginning snapshot");
+            _snapshotAction?.Invoke();
+            Log.Information("Snapshot completed successfully");
+
+            _snapshotResetEvent.Set();
+
+            await Task.WhenAll(tasks);
+        }
+
+        private async Task ExecuteAsync(Database database)
+        {
             using (var connection = GetConnection())
             using (var command = connection.CreateCommand())
             {
                 var virtualDeviceName = $"sqlsnap-{Guid.NewGuid()}";
 
-                command.CommandText = GetSqlCommand(virtualDeviceName);
+                command.CommandText = GetSqlCommand(virtualDeviceName, database.Name);
                 command.CommandTimeout = _timeout;
 
                 var config = new VDConfig
@@ -187,11 +208,14 @@ namespace SqlSnap.Core
                     Log.Debug("Executing SQL query: {commandText}", command.CommandText);
                     var queryTask = command.ExecuteNonQueryAsync();
 
-                    Log.Debug("Waiting for virtual device to be ready");
-                    var virtualDevice = WaitForDevice(virtualDeviceSet, virtualDeviceName);
+                    await Task.Run(() =>
+                    {
+                        Log.Debug("Waiting for virtual device to be ready");
+                        var virtualDevice = WaitForDevice(virtualDeviceSet, virtualDeviceName);
 
-                    Log.Debug("Receiving commands from virtual device");
-                    HandleCommands(virtualDevice);
+                        Log.Debug("Receiving commands from virtual device");
+                        HandleCommands(database, virtualDevice);
+                    });
 
                     Log.Debug("Waiting for query to finish");
                     await queryTask;

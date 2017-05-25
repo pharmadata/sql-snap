@@ -1,5 +1,5 @@
 ﻿using System;
-using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Serilog;
 
@@ -18,29 +18,26 @@ namespace SqlSnap.Core
         {
         }
 
-        public async Task BackupAsync(string databaseName, Stream metadataStream, Action snapshotAction, int timeout)
+        public async Task BackupAsync(Database[] databases, Action snapshotAction, int timeout)
         {
-            Log.Information("Preparing to backup {databaseName}", databaseName);
+            Log.Information("Preparing to backup {databases}", string.Join(", ", databases.Select(d => d.Name)));
 
             await
-                new Operation(_instanceName, databaseName, OperationMode.Backup, metadataStream, snapshotAction, false,
-                    timeout)
+                new Operation(_instanceName, databases, OperationMode.Backup, snapshotAction, false, timeout)
                     .ExecuteAsync();
 
-            Log.Information("Backed up {databaseName} successfully", databaseName);
+            Log.Information("Backed up {databases} successfully", string.Join(", ", databases.Select(d => d.Name)));
         }
 
-        public async Task RestoreAsync(string databaseName, Stream metadataStream, Action snapshotMountAction,
-            bool noRecovery, int timeout)
+        public async Task RestoreAsync(Database[] databases, Action snapshotMountAction, bool noRecovery, int timeout)
         {
-            Log.Information("Preparing to restore {databaseName}", databaseName);
+            Log.Information("Preparing to restore {databases}", string.Join(", ", databases.Select(d => d.Name)));
 
             await
-                new Operation(_instanceName, databaseName, OperationMode.Restore, metadataStream, snapshotMountAction,
-                    noRecovery, timeout)
+                new Operation(_instanceName, databases, OperationMode.Restore, snapshotMountAction, noRecovery, timeout)
                     .ExecuteAsync();
 
-            Log.Information("Restored {databaseName} successfully", databaseName);
+            Log.Information("Restored {databases} successfully", string.Join(", ", databases.Select(d => d.Name)));
         }
     }
 }

@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using CommandLine;
 using Serilog;
 using Serilog.Events;
@@ -46,24 +48,39 @@ namespace SqlSnap.Cli
                 throw new IOException($"Unable to complete snapshot due to non-zero exit code {process.ExitCode}");
         }
 
+        private static Database[] OpenDatabases(string metadataPath, IList<string> databaseNames, FileMode mode, FileAccess access)
+        {
+            return databaseNames.Select(databaseName => new Database
+            {
+                Name = databaseName,
+                MetadataStream =
+                    File.Open(Path.Combine(metadataPath, $"{databaseName}.metadata"), mode, access, FileShare.None)
+            }).ToArray();
+        }
+
         private static int Backup(BackupOptions options)
         {
             ConfigureLogging(options.Verbose);
 
+            Database[] databases = null;
+
             try
             {
-                using (var stream = File.Open(options.MetadataPath, FileMode.Create, FileAccess.Write, FileShare.None))
-                {
-                    var server = new Server(options.InstanceName);
-                    server.BackupAsync(options.Database, stream, () => RunSnapshotCommand(options.SnapshotCommand),
-                        options.Timeout)
-                        .Wait();
-                }
+                databases = OpenDatabases(options.MetadataPath, options.Database, FileMode.Create, FileAccess.Write);
+                var server = new Server(options.InstanceName);
+                server.BackupAsync(databases, () => RunSnapshotCommand(options.SnapshotCommand), options.Timeout)
+                    .Wait();
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "Unable to complete the backup");
                 return -1;
+            }
+            finally
+            {
+                if (databases != null)
+                    foreach (var database in databases)
+                        database.MetadataStream.Dispose();
             }
 
             return 0;
@@ -73,23 +90,29 @@ namespace SqlSnap.Cli
         {
             ConfigureLogging(options.Verbose);
 
+            Database[] databases = null;
+
             try
             {
-                using (var stream = File.Open(options.MetadataPath, FileMode.Open, FileAccess.Read, FileShare.None))
-                {
-                    var snapshotCommand = string.IsNullOrEmpty(options.SnapshotCommand)
-                        ? (Action) null
-                        : () => RunSnapshotCommand(options.SnapshotCommand);
+                databases = OpenDatabases(options.MetadataPath, options.Database, FileMode.Open, FileAccess.Read);
+                var snapshotCommand = string.IsNullOrEmpty(options.SnapshotCommand)
+                    ? (Action) null
+                    : () => RunSnapshotCommand(options.SnapshotCommand);
 
-                    var server = new Server(options.InstanceName);
-                    server.RestoreAsync(options.Database, stream, snapshotCommand, options.NoRecovery, options.Timeout)
-                        .Wait();
-                }
+                var server = new Server(options.InstanceName);
+                server.RestoreAsync(databases, snapshotCommand, options.NoRecovery, options.Timeout)
+                    .Wait();
             }
             catch (Exception ex)
             {
                 Log.Error(ex, "Unable to complete the restore");
                 return -1;
+            }
+            finally
+            {
+                if (databases != null)
+                    foreach (var database in databases)
+                        database.MetadataStream.Dispose();
             }
 
             return 0;
